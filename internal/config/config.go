@@ -15,10 +15,11 @@ type Config struct {
 	APIPort string
 
 	// Worker
-	MaxWorkers      int
-	RateLimitPerSec float64
-	PollInterval    time.Duration
-	BatchSize       int
+	MaxWorkers           int
+	RateLimitPerSec      float64
+	DomainRateLimitPerSec float64
+	PollInterval         time.Duration
+	BatchSize            int
 
 	// HTTP Client
 	RequestTimeout  time.Duration
@@ -42,10 +43,11 @@ func Load() *Config {
 		APIPort: getEnv("API_PORT", "8080"),
 
 		// Worker
-		MaxWorkers:      getEnvInt("MAX_WORKERS", 10),
-		RateLimitPerSec: getEnvFloat("RATE_LIMIT_PER_SEC", 5.0),
-		PollInterval:    getEnvDuration("POLL_INTERVAL", 5*time.Second),
-		BatchSize:       getEnvInt("BATCH_SIZE", 100),
+		MaxWorkers:            getEnvInt("MAX_WORKERS", 10),
+		RateLimitPerSec:       getEnvFloat("RATE_LIMIT_PER_SEC", 5.0),
+		DomainRateLimitPerSec: getEnvFloat("DOMAIN_RATE_LIMIT_PER_SEC", 2.0),
+		PollInterval:          getEnvDuration("POLL_INTERVAL", 5*time.Second),
+		BatchSize:             getEnvInt("BATCH_SIZE", 100),
 
 		// HTTP Client
 		RequestTimeout:  getEnvDuration("REQUEST_TIMEOUT", 8*time.Second),

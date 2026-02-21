@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"log/slog"
+	"net/url"
 	"sync"
 	"time"
 
@@ -11,18 +12,21 @@ import (
 	"url-collector/internal/domain"
 	"url-collector/internal/httpclient"
 	"url-collector/internal/repository"
+
+	"golang.org/x/time/rate"
 )
 
 // Worker handles URL collection scheduling and execution
 type Worker struct {
-	urlRepo      *repository.URLRepository
-	runRepo      *repository.RunRepository
-	fetcher      *Fetcher
-	config       *config.Config
-	logger       *slog.Logger
-	jobQueue     chan *domain.URL
-	wg           sync.WaitGroup
-	concurrencyMu sync.Map // map[string]*sync.Mutex for concurrency groups
+	urlRepo        *repository.URLRepository
+	runRepo        *repository.RunRepository
+	fetcher        *Fetcher
+	config         *config.Config
+	logger         *slog.Logger
+	jobQueue       chan *domain.URL
+	wg             sync.WaitGroup
+	concurrencyMu  sync.Map // map[string]*sync.Mutex for concurrency groups
+	domainLimiters sync.Map // map[string]*rate.Limiter for domain-specific rate limiting
 }
 
 // NewWorker creates a new worker
@@ -125,7 +129,19 @@ func (w *Worker) worker(ctx context.Context, id int) {
 func (w *Worker) processURL(ctx context.Context, workerID int, url *domain.URL) {
 	startTime := time.Now()
 
-	// Concurrency group handling
+	// Domain-specific rate limiting
+	domain := extractDomain(url.URL)
+	domainLimiter := w.getDomainLimiter(domain)
+	if err := domainLimiter.Wait(ctx); err != nil {
+		w.logger.Error("domain rate limit wait failed",
+			"url_id", url.ID,
+			"domain", domain,
+			"error", err,
+		)
+		return
+	}
+
+	// Concurrency group handling (for complete serialization if needed)
 	if url.ConcurrencyGroup != nil && *url.ConcurrencyGroup != "" {
 		lock := w.getGroupLock(*url.ConcurrencyGroup)
 		lock.Lock()
@@ -136,6 +152,7 @@ func (w *Worker) processURL(ctx context.Context, workerID int, url *domain.URL) 
 		"worker_id", workerID,
 		"url_id", url.ID,
 		"url", url.URL,
+		"domain", domain,
 	)
 
 	// Fetch URL
@@ -190,4 +207,22 @@ func (w *Worker) processURL(ctx context.Context, workerID int, url *domain.URL) 
 func (w *Worker) getGroupLock(group string) *sync.Mutex {
 	lock, _ := w.concurrencyMu.LoadOrStore(group, &sync.Mutex{})
 	return lock.(*sync.Mutex)
+}
+
+// extractDomain extracts domain from URL
+func extractDomain(rawURL string) string {
+	parsedURL, err := url.Parse(rawURL)
+	if err != nil {
+		return rawURL // fallback to raw URL
+	}
+	return parsedURL.Host
+}
+
+// getDomainLimiter gets or creates a rate limiter for the specified domain
+func (w *Worker) getDomainLimiter(domain string) *rate.Limiter {
+	limiter, _ := w.domainLimiters.LoadOrStore(
+		domain,
+		rate.NewLimiter(rate.Limit(w.config.DomainRateLimitPerSec), int(w.config.DomainRateLimitPerSec)),
+	)
+	return limiter.(*rate.Limiter)
 }

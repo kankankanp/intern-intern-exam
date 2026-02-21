@@ -112,7 +112,8 @@ curl http://localhost:8080/urls/1/runs
 | `DATABASE_URL` | - | PostgreSQL接続文字列 |
 | `API_PORT` | 8080 | APIサーバポート |
 | `MAX_WORKERS` | 10 | 最大同時実行Worker数 |
-| `RATE_LIMIT_PER_SEC` | 5 | 秒間リクエスト上限 |
+| `RATE_LIMIT_PER_SEC` | 5 | 秒間リクエスト上限（グローバル） |
+| `DOMAIN_RATE_LIMIT_PER_SEC` | 2 | ドメイン別秒間リクエスト上限 |
 | `REQUEST_TIMEOUT` | 8s | HTTPリクエストタイムアウト |
 | `MAX_RETRY_ATTEMPTS` | 3 | 最大リトライ回数 |
 | `RETRY_BASE_DELAY` | 10s | リトライ基本待機時間 |
@@ -165,9 +166,13 @@ curl http://localhost:8080/urls/1/runs
 - `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16` (プライベート)
 - `169.254.0.0/16` (リンクローカル/AWSメタデータ)
 
+### ドメイン別レート制限
+
+各ドメインに対して個別にレート制限を適用（デフォルト: 2件/秒）。同一ドメインへの過度な負荷を防ぎつつ、異なるドメインは並行処理可能。
+
 ### 同時実行制御
 
-`maxConcurrencyGroup`を指定すると、同一グループのURLは直列実行され、特定サイトへの負荷を軽減。
+`maxConcurrencyGroup`を指定すると、同一グループのURLは完全に直列実行され、より厳格な負荷軽減が可能。
 
 ## 開発
 
