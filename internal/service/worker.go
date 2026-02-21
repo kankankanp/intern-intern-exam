@@ -181,6 +181,7 @@ func (w *Worker) processURL(ctx context.Context, workerID int, url *domain.URL) 
 		"worker_id", workerID,
 		"url_id", url.ID,
 		"url", url.URL,
+		"domain", domain,
 		"status", result.Run.Status,
 		"latency_ms", result.Run.LatencyMs,
 		"attempt", result.Run.Attempt,
