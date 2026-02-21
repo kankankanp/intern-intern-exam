@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/rand"
 	"net"
 	"net/url"
@@ -64,17 +65,27 @@ func (f *Fetcher) Fetch(ctx context.Context, urlEntity *domain.URL) *FetchResult
 
 		// Fetch
 		result, err := f.client.Fetch(ctx, urlEntity.URL)
-		if err == nil {
-			// Success - parse and return
+
+		// Check for success (2xx, 3xx, 4xx are not retried)
+		if err == nil && result.StatusCode < 500 {
+			// Success or client error - return immediately
 			return f.createSuccessRun(urlEntity, result, attempt)
 		}
 
-		lastErr = err
-		lastResult = result
-
-		// Check if retryable
-		if !f.isRetryable(err) {
-			break
+		// Record error/result for retry
+		if err != nil {
+			// Network/protocol error
+			lastErr = err
+			lastResult = result
+			// Check if retryable
+			if !f.isRetryable(err) {
+				break
+			}
+		} else {
+			// 5xx server error - always retryable
+			lastErr = fmt.Errorf("HTTP %d error", result.StatusCode)
+			lastResult = result
+			// 5xx is retryable, continue to retry logic
 		}
 
 		// Wait before retry (except for last attempt)
